@@ -21,6 +21,8 @@ typedef struct {
 
 typedef struct {
   char ** plaintext;
+  int line_no;
+  int body;
   int method;
   char * path;
   char * host;
@@ -33,10 +35,18 @@ typedef struct {
 //   request_body body;
 // } request;
 
+typedef struct {
+  int type;
+  int line_no;
+  char ** plaintext;
+} request_body;
+
 void rio_readinitb(rio_t *rp, int fd) {
+  printf("In read init function\n");
   rp->rio_fd = fd;  
   rp->rio_cnt = 0;  
   rp->rio_bufptr = rp->rio_buf;
+  printf("ending read init function\n");
 }
 
 ssize_t rio_writen(int fd, void *usrbuf, size_t n) {
@@ -106,51 +116,71 @@ ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen) {
     return n-1;
 }
 
-void parse_header(request_header * header, int line_no) {
-  for (int i = 0; i < line_no; i++) {
+void parse_header(request_header * header) {
+  for (int i = 0; i < header->line_no; i++) {
     printf("%s", header->plaintext[i]);
-    
+  }
+  header->content_length = 37;
+  header->body = 0;
+}
+
+void parse_body(request_body * body) {
+  for (int i = 0; i < body->line_no; i++) {
+    printf("%s", body->plaintext[i]);
   }
 }
 
-void parse_body(char ** rough_body, int line_no) {
-  for (int i = 0; i < line_no; i++) {
-    printf("%s", rough_body[i]);
+int read_header(rio_t * rio, request_header * header) {
+  int line_no = 0;
+  char buf[MAXLINE];
+  header->plaintext = calloc(MAXLINE, MAXLINE);
+
+  printf("In read header function\n");
+
+  while (strcmp(buf, "\r\n")) {
+  rio_readlineb(rio, buf, MAXLINE);
+    header->plaintext[line_no]= strdup(buf);
+    line_no++;
   }
+  header->line_no = line_no;
+  parse_header(header);
+  return 1;
 }
 
+int read_body(rio_t * rio, request_header * header, request_body * body) {
+  ssize_t body_size = 0;
+  char buf[MAXLINE];
+  int line_no = 0;
+  body->plaintext = calloc(MAXLINE, MAXLINE);
+
+  while (body_size < header->content_length) {
+    body_size += rio_readlineb(rio, buf, MAXLINE);
+    body->plaintext[line_no] = strdup(buf);
+    // printf("Body size: %d\n", (int) body_size);
+    line_no++;
+  }
+  body->line_no = line_no;
+
+  return 1;
+}
 
 void handle_request(int connfd) {
-  size_t n;
-  char buf[MAXLINE];
   rio_t rio;
-  int sec = HEADER;
-  int line_no = 0;
   request_header * header = malloc(sizeof(request_header));
-  header->plaintext = calloc(MAXLINE, MAXLINE);
-  char ** rough_body = calloc(MAXLINE, MAXLINE);
+  request_body * body = malloc(sizeof(request_body));
 
-  int total_bytes = 0;
   rio_readinitb(&rio, connfd);
-  while((n = rio_readlineb(&rio, buf, MAXLINE)) != 0) {
-    header->plaintext[line_no]= strdup(buf);
-    if (strcmp(buf, "\r\n") == 0) {
-      sec = BODY;
-      parse_header(header, line_no);
-      line_no = -1;
-    }
-    else if (sec == BODY) {
-    total_bytes += n;
-      rough_body[line_no] = strdup(buf);
-    }
-    line_no++;
-    if (total_bytes >= 38) {
-      parse_body(rough_body, line_no);
-    }
-    // rio_writen(connfd, buf, n);
+  read_header(&rio, header);
+  if (header->body) {
+    read_body(&rio, header, body);
+    parse_body(body);
   }
+  printf("after body\n");
+  char * response = "HTTP/1.1 200 OK\nContent-Length: 19\nContent-Type: text/html\n\n<p>Hello World!</p>";
+  rio_writen(connfd, response, strlen(response));
   free(header->plaintext);
-  free(rough_body);
+  free(header);
+  free(body);
 }
 
 int main(int argc, char **argv) {
@@ -171,6 +201,7 @@ int main(int argc, char **argv) {
     getnameinfo((struct sockaddr *) &clientaddr, clientlen, client_hostname, MAXLINE, client_port, MAXLINE, 0);
     printf("Connected to (%s %s)\n", client_hostname, client_port);
     handle_request(connfd);
+    printf("After Request\n");
     close(connfd);
   }
   exit(0);
