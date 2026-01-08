@@ -108,7 +108,7 @@ ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen) {
 
 void parse_header(request_header * header, int line_no) {
   for (int i = 0; i < line_no; i++) {
-    // printf("%s", header->plaintext[i]);
+    printf("%s", header->plaintext[i]);
     
   }
 }
