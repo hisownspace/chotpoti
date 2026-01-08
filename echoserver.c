@@ -22,6 +22,7 @@ typedef struct {
 typedef struct {
   char ** plaintext;
   int line_no;
+  int body;
   int method;
   char * path;
   char * host;
@@ -120,6 +121,7 @@ void parse_header(request_header * header) {
     printf("%s", header->plaintext[i]);
   }
   header->content_length = 37;
+  header->body = 0;
 }
 
 void parse_body(request_body * body) {
@@ -154,7 +156,7 @@ int read_body(rio_t * rio, request_header * header, request_body * body) {
   while (body_size < header->content_length) {
     body_size += rio_readlineb(rio, buf, MAXLINE);
     body->plaintext[line_no] = strdup(buf);
-    printf("Body size: %d\n", (int) body_size);
+    // printf("Body size: %d\n", (int) body_size);
     line_no++;
   }
   body->line_no = line_no;
@@ -169,15 +171,16 @@ void handle_request(int connfd) {
 
   rio_readinitb(&rio, connfd);
   read_header(&rio, header);
-  printf("Before Body\n");
-  read_body(&rio, header, body);
-  printf("After Body\n");
-  parse_body(body);
-  // rio_writen(connfd, buf, n);
+  if (header->body) {
+    read_body(&rio, header, body);
+    parse_body(body);
+  }
+  printf("after body\n");
+  char * response = "HTTP/1.1 200 OK\nContent-Length: 19\nContent-Type: text/html\n\n<p>Hello World!</p>";
+  rio_writen(connfd, response, strlen(response));
   free(header->plaintext);
   free(header);
   free(body);
-  // free(rough_body);
 }
 
 int main(int argc, char **argv) {
