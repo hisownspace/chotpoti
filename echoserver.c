@@ -39,9 +39,11 @@ typedef struct {
 } request_body;
 
 void rio_readinitb(rio_t *rp, int fd) {
+  printf("In read init function\n");
   rp->rio_fd = fd;  
   rp->rio_cnt = 0;  
   rp->rio_bufptr = rp->rio_buf;
+  printf("ending read init function\n");
 }
 
 ssize_t rio_writen(int fd, void *usrbuf, size_t n) {
@@ -113,9 +115,9 @@ ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen) {
 
 void parse_header(request_header * header, int line_no) {
   for (int i = 0; i < line_no; i++) {
-    // printf("%s", header->plaintext[i]);
-    
+    printf("%s", header->plaintext[i]);
   }
+  header->content_length = 37;
 }
 
 void parse_body(char ** rough_body, int line_no) {
@@ -144,6 +146,7 @@ int read_body(rio_t * rio, request_header * header, request_body * body) {
   ssize_t body_size = 0;
   char buf[MAXLINE];
   int line_no = 0;
+  body->plaintext = calloc(MAXLINE, MAXLINE);
 
   while (body_size < header->content_length) {
     rio_readlineb(rio, buf, MAXLINE);
@@ -155,20 +158,20 @@ int read_body(rio_t * rio, request_header * header, request_body * body) {
 }
 
 void handle_request(int connfd) {
-  rio_t * rio;
+  rio_t rio;
   request_header * header = malloc(sizeof(request_header));
   request_body * body = malloc(sizeof(request_body));
 
-  printf("Before readinit\n");
-  rio_readinitb(rio, connfd);
-  printf("After readinit\n");
-  // read_header(rio, header);
-  // read_body(rio, header, body);
+  rio_readinitb(&rio, connfd);
+  read_header(&rio, header);
+  printf("Before Body\n");
+  read_body(&rio, header, body);
+  printf("After Body\n");
     
   // parse_body(rough_body, line_no);
   // rio_writen(connfd, buf, n);
-  free(header);
   free(header->plaintext);
+  free(header);
   // free(rough_body);
 }
 
