@@ -21,6 +21,7 @@ typedef struct {
 
 typedef struct {
   char ** plaintext;
+  int line_no;
   int method;
   char * path;
   char * host;
@@ -35,6 +36,7 @@ typedef struct {
 
 typedef struct {
   int type;
+  int line_no;
   char ** plaintext;
 } request_body;
 
@@ -113,16 +115,16 @@ ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen) {
     return n-1;
 }
 
-void parse_header(request_header * header, int line_no) {
-  for (int i = 0; i < line_no; i++) {
+void parse_header(request_header * header) {
+  for (int i = 0; i < header->line_no; i++) {
     printf("%s", header->plaintext[i]);
   }
   header->content_length = 37;
 }
 
-void parse_body(char ** rough_body, int line_no) {
-  for (int i = 0; i < line_no; i++) {
-    printf("%s", rough_body[i]);
+void parse_body(request_body * body) {
+  for (int i = 0; i < body->line_no; i++) {
+    printf("%s", body->plaintext[i]);
   }
 }
 
@@ -138,7 +140,8 @@ int read_header(rio_t * rio, request_header * header) {
     header->plaintext[line_no]= strdup(buf);
     line_no++;
   }
-  parse_header(header, line_no);
+  header->line_no = line_no;
+  parse_header(header);
   return 1;
 }
 
@@ -149,10 +152,12 @@ int read_body(rio_t * rio, request_header * header, request_body * body) {
   body->plaintext = calloc(MAXLINE, MAXLINE);
 
   while (body_size < header->content_length) {
-    rio_readlineb(rio, buf, MAXLINE);
+    body_size += rio_readlineb(rio, buf, MAXLINE);
     body->plaintext[line_no] = strdup(buf);
+    printf("Body size: %d\n", (int) body_size);
     line_no++;
   }
+  body->line_no = line_no;
 
   return 1;
 }
@@ -167,11 +172,11 @@ void handle_request(int connfd) {
   printf("Before Body\n");
   read_body(&rio, header, body);
   printf("After Body\n");
-    
-  // parse_body(rough_body, line_no);
+  parse_body(body);
   // rio_writen(connfd, buf, n);
   free(header->plaintext);
   free(header);
+  free(body);
   // free(rough_body);
 }
 
