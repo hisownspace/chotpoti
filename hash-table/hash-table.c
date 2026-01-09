@@ -4,12 +4,14 @@
 #include "sha256.h"
 #include "hash-table.h"
 
-#define MINCAP 8
+#define MINCAP 128
 
 typedef struct {
   char * key;
-  void * value;
-} ht_entry;
+  char * strVal;
+  int intVal;
+  int type;
+} ht_entry ;
 
 struct ht {
   ht_entry * entries;
@@ -17,8 +19,8 @@ struct ht {
   size_t length;
 };
 
-struct ht * create_ht(void) {
-  struct ht * table = malloc(sizeof(struct ht));
+ht * create_ht(void) {
+  ht * table = malloc(sizeof(ht));
   if (table == NULL) {
     printf("Insufficient memory!");
     return NULL;
@@ -45,7 +47,7 @@ void destroy_ht(struct ht * table) {
   free(table);
 }
 
-int get_key_idx(char * key, struct ht * table, ht_entry * entries) {
+int get_key_idx(struct ht * table, ht_entry * entries, char * key) {
   char hex[SHA256_HEX_SIZE];
 
   sha256_hex(key, strlen(key), hex);
@@ -79,42 +81,60 @@ void * resize_table(struct ht * table) {
   for (i = 0; i < table->capacity/2; i++) {
     if (table->entries[i].key == NULL)
       continue;
-    int idx = get_key_idx(table->entries[i].key, table, new_entries);
-    new_entries[idx].key = table->entries[i].key;
-    new_entries[idx].value = table->entries[i].value;
+    int idx = get_key_idx(table, new_entries, table->entries[i].key);
+    new_entries[idx].key = strdup(table->entries[i].key);
+    if (table->entries[i].strVal == NULL)
+      new_entries[idx].intVal = table->entries[i].intVal;
+    else
+      new_entries[idx].strVal = table->entries[i].strVal;
   }
   free(table->entries);
   table->entries = new_entries;
   return new_entries;
 }
 
-char * set_entry(char * key, char * value, struct ht * table) {
+char * set_entry(struct ht * table, char * key, char * strVal, int intVal) {
   if ((int) table->length > (table->capacity * 2/3))
     if (resize_table(table) == NULL)
       return NULL;
 
-  int idx = get_key_idx(key, table, table->entries);
-
+  // printf("KEY IN SET_ENTRY: %s\n", key);
+  // printf("Key ptr in SET_ENTRY: %p\n", key);
+  int idx = get_key_idx(table, table->entries, key);
+  // printf("IDX: %d\n", idx);
+  // if (strcmp(key, "Content-Type") == 0)
+  //   printf("String is Content-Type");
   if (table->entries[idx].key == NULL) {
-    key = strdup(key);
+    printf("ENTRY STRING IS NULL!!!\n");
     if (key == NULL) {
       printf("Insufficient memory!");
       return NULL;
     }
-    table->entries[idx].key = key;
-  } else {
-    // printf("Existing Key: %s\n'", table->entries[idx].key);
-  }
+    table->entries[idx].key = strdup(key);
+    printf("%s\n", table->entries[idx].key);
+    printf("%p\n", table->entries[idx].key);
+    printf("%p\n", &table->entries[idx].key);
     table->length++;
-  table->entries[idx].value = value;
+    printf("%d\n", (int) table->length);
+  } 
+  if (strVal == NULL) {
+    table->entries[idx].intVal = intVal;
+    table->entries[idx].type = 0;
+  }
+  else {
+    table->entries[idx].strVal = strVal;
+    table->entries[idx].type = 1;
+  }
     
   return key;
 }
 
-void remove_entry(char * key, ht * table) {
-  int idx = get_key_idx(key, table, table->entries);
+void remove_entry(ht * table, char * key) {
+  int idx = get_key_idx(table, table->entries, key);
   free(table->entries[idx].key);
   table->length--;
+    // free(key);
+    // free(value);
   if (idx >= table->capacity - 1)
     idx = -1;
   for (int cnt = idx + 1; (key = table->entries[cnt].key) != NULL; cnt++) {
@@ -122,19 +142,36 @@ void remove_entry(char * key, ht * table) {
       cnt = -1;
       continue;
     }
-    int new_idx = get_key_idx(key, table, table->entries);
+    int new_idx = get_key_idx(table, table->entries, key);
     if (new_idx == cnt)
       break;
-    table->entries[new_idx].key = strdup(key);
-    table->entries[new_idx].value = table->entries[cnt].value;
+    table->entries[new_idx].strVal = table->entries[cnt].strVal;
+    table->entries[new_idx].intVal = table->entries[cnt].intVal;
     key = NULL;
   }
 }
 
-char * get_entry(char * key, struct ht * table) {
-  int idx = get_key_idx(key, table, table->entries);
+char * get_str_entry(struct ht * table, char * key) {
+  int idx = get_key_idx(table, table->entries, key);
 
-  return table->entries[idx].value;
+  printf("idx in get_str_entry %d\n", idx);
+  return table->entries[idx].strVal;
+}
+
+int get_int_entry(struct ht * table, char * key) {
+  int idx = get_key_idx(table, table->entries, key);
+
+  return table->entries[idx].intVal;
+}
+
+int get_entry_type(struct ht * table, char * key) {
+  int idx = get_key_idx(table, table->entries, key);
+  printf("%d\n", table->entries[idx].type);
+  return table->entries[idx].type;
+}
+
+int get_ht_length(ht * table) {
+  return table->length;
 }
 
 void print_table(ht * table) {
