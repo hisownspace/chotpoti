@@ -21,9 +21,9 @@ typedef struct {
 } rio_t;
 
 struct request_line {
-  int method;
+  char * method;
   char * target;
-  int version;
+  char * version;
 };
 
 struct request_header {
@@ -120,21 +120,30 @@ ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen) {
 
 void parse_header(request * req) {
 
+  char * buf = strtok(req->headers->plaintext[0], " ");
+  req->start_line->method = buf;
+  buf = strtok(NULL, " ");
+  req->start_line->target = buf;
+  buf = strtok(NULL, " ");
+  req->start_line->version = buf;
+
   for (int i = 1; i < req->headers->no_lines; i++) {
     char * header = req->headers->plaintext[i];
     if (strcmp(header, "\r\n") == 0)
       break;
-    int ws_idx = (int) strcspn(header, ":");
-    char * key = strndup(header, ws_idx);
-    char * value = strdup(&header[ws_idx + 2]);
-    key[ws_idx] = 0;
-    set_entry(req->headers->content, key, value, 0);
-    // free(key); free(value);
+    // int colon_idx = (int) strcspn(header, ":");
+    // char * key = strndup(header, colon_idx);
+    // char * value = strdup(&header[colon_idx + 2]);
+    // key[colon_idx] = 0;
+    char * key = strtok(header, ":");
+    char * value = strtok(NULL, "\0");
+    value++;
+    value[strlen(value) - 2] = 0;
+    if (strcmp(key, "Content-Length") == 0)
+      set_entry(req->headers->content, key, NULL, strtol(value, NULL, 10));
+    else
+      set_entry(req->headers->content, key, value, 0);
   }
-  printf("%s\n", get_str_entry(req->headers->content, "Content-Length"));
-  if (get_str_entry(req->headers->content, "Host") != NULL)
-    printf("%s\n", get_str_entry(req->headers->content, "Host"));
-  printf("Content length: %d\n", get_ht_length(req->headers->content));
 }
 
 void parse_body(request * req) {
@@ -146,8 +155,6 @@ void parse_body(request * req) {
 int read_header(rio_t * rio, request* req) {
   int line_no = 0;
   char buf[MAXLINE];
-
-  printf("In read header function\n");
 
   while (strcmp(buf, "\r\n")) {
   rio_readlineb(rio, buf, MAXLINE);
@@ -168,9 +175,10 @@ int read_body(rio_t * rio, request * req) {
   char buf[MAXLINE];
   int no_lines = 0;
 
-  printf("In read body function\n");
-  while (body_size < get_int_entry(req->headers->content, "Content-Length")) {
-    body_size += rio_readlineb(rio, buf, MAXLINE);
+  int body_length = get_int_entry(req->headers->content, "Content-Length");
+
+  while (body_size < body_length) {
+    body_size += rio_read(rio, buf, MAXLINE);
     req->body->plaintext[no_lines] = strdup(buf);
     no_lines++;
   }
@@ -188,16 +196,15 @@ void handle_request(int connfd) {
   req->headers->content = create_ht();
   req->body = malloc(sizeof(struct request_body));
   req->body->plaintext = calloc(MAXLINE, MAXLINE);
+  req->start_line = malloc(sizeof(struct request_line));
 
   rio_readinitb(&rio, connfd);
   read_header(&rio, req);
-  printf("After read header\n");
+  print_table(req->headers->content);
   if (req->body) {
-    printf("Before read body\n");
     read_body(&rio, req);
     parse_body(req);
   }
-  printf("after read body\n");
   char * response = "HTTP/1.1 200 OK\nContent-Length: 19\nContent-Type: text/html\n\n<p>Hello World!</p>";
   rio_writen(connfd, response, strlen(response));
   free(req->headers->plaintext);

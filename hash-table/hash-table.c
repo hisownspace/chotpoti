@@ -5,6 +5,8 @@
 #include "hash-table.h"
 
 #define MINCAP 128
+#define INT 0
+#define STR 1
 
 typedef struct {
   char * key;
@@ -98,32 +100,22 @@ char * set_entry(struct ht * table, char * key, char * strVal, int intVal) {
     if (resize_table(table) == NULL)
       return NULL;
 
-  // printf("KEY IN SET_ENTRY: %s\n", key);
-  // printf("Key ptr in SET_ENTRY: %p\n", key);
   int idx = get_key_idx(table, table->entries, key);
-  // printf("IDX: %d\n", idx);
-  // if (strcmp(key, "Content-Type") == 0)
-  //   printf("String is Content-Type");
   if (table->entries[idx].key == NULL) {
-    printf("ENTRY STRING IS NULL!!!\n");
     if (key == NULL) {
       printf("Insufficient memory!");
       return NULL;
     }
     table->entries[idx].key = strdup(key);
-    printf("%s\n", table->entries[idx].key);
-    printf("%p\n", table->entries[idx].key);
-    printf("%p\n", &table->entries[idx].key);
     table->length++;
-    printf("%d\n", (int) table->length);
   } 
-  if (strVal == NULL) {
+  if (intVal) {
     table->entries[idx].intVal = intVal;
-    table->entries[idx].type = 0;
+    table->entries[idx].type = INT;
   }
   else {
     table->entries[idx].strVal = strVal;
-    table->entries[idx].type = 1;
+    table->entries[idx].type = STR;
   }
     
   return key;
@@ -170,10 +162,19 @@ int get_entry_type(struct ht * table, char * key) {
   return table->entries[idx].type;
 }
 
-int get_ht_length(ht * table) {
-  return table->length;
+void print_length(ht * table) {
+  printf("%d\n", (int) table->length);
 }
 
 void print_table(ht * table) {
-  printf("Hash Table:\nCapacity: %ld\nLength: %ld\n", table->capacity, table->length);
+  printf("{\n");
+  for (int i = 0; i < table->capacity; i++) {
+    if (table->entries[i].key == NULL)
+      continue;
+    if (table->entries[i].type == STR)
+      printf("%s: \"%s\",\n", table->entries[i].key, table->entries[i].strVal);
+    else
+      printf("%s: %d,\n", table->entries[i].key, table->entries[i].intVal);
+  }
+  printf("}\n");
 }
